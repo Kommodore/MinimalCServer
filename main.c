@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
 
                 // If n is smaller than 256, we got all needed data and process the request
                 if(read_bytes < HEADER_BUFFER_SIZE) {
-                    process_request(client_header_data, client_info);
+                    process_request(client_header_data, &client_info);
                     break;
                 }
             }
@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     }
 }
 
-void process_request(char* request_header, socket_info client_info){
+void process_request(char* request_header, socket_info* client_info){
     client_header client_data;
     int statuscode;
     long resp_size;
@@ -82,7 +82,6 @@ void process_request(char* request_header, socket_info client_info){
     if(strcmp(client_data.method, "GET") != 0){
         statuscode = HTTP_LEVEL_500+1;
     } else {
-        printf("Opening %s",client_data.file);
         struct stat file_stat;
         if(stat(client_data.file, &file_stat) < 0){
             statuscode = HTTP_LEVEL_400+4;
@@ -100,8 +99,8 @@ void process_request(char* request_header, socket_info client_info){
             }
         }
     }
-    write(client_info.sock_fd, gen_response(file_ptr, statuscode, &resp_size), (size_t)resp_size);
-    close(client_info.sock_fd);
+    write(client_info->sock_fd, gen_response(file_ptr, statuscode, &resp_size), (size_t)resp_size);
+    close(client_info->sock_fd);
 }
 
 /**
@@ -195,7 +194,7 @@ char* gen_response(FILE* file_ptr, int statuscode, long* resp_size){
     }
 
     // Generate header
-    gen_header(&header, statuscode, file_meta);
+    gen_header(&header, statuscode, &file_meta);
     *resp_size = file_meta.file_size+(strlen(header)*sizeof(char));
     response = (char*)malloc((size_t)*resp_size);
     sprintf(response, "%s\n%s", header, content);
@@ -209,7 +208,7 @@ char* gen_response(FILE* file_ptr, int statuscode, long* resp_size){
  * @param status_response The status message of the request.
  * @param file_data struct containing all file info needed for the header. (Last modified, content type)
  */
-void gen_header(char **header, int status_response, file_info file_data) {
+void gen_header(char **header, int status_response, file_info* file_data) {
     char char_set[32], curr_time[32], lang[3];
 
     time_t raw_time = time(NULL);
@@ -218,13 +217,13 @@ void gen_header(char **header, int status_response, file_info file_data) {
     strcpy(lang, "de");
 
     // If no modify date is set use the current one
-    if(strcmp(file_data.modify_date, "") == 0){
-        strcpy(file_data.modify_date, curr_time);
+    if(strcmp(file_data->modify_date, "") == 0){
+        strcpy(file_data->modify_date, curr_time);
     }
 
     *header = (char*)malloc(sizeof(char)*256);
     sprintf(*header, "HTTP/1.1 %s\nDate: %s\nLast-Modified: %s\nContent-Language: %s\nContent-Type: %s; charset=%s\n",
-            status_lines[status_response], curr_time, file_data.modify_date, lang, file_data.content_type, char_set);
+            status_lines[status_response], curr_time, file_data->modify_date, lang, file_data->content_type, char_set);
     printf("RESPONSE:\n%s", *header);
 }
 
