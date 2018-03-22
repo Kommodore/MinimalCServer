@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
             // Cycle as long as the client sends a message
             for(int iterations = 0;; iterations++)
             {
+                long resp_size;
                 // Alloc enough memory to store whole input string;
                 if(iterations == 0){
                     client_header_data = (char*)malloc(sizeof(char)*HEADER_BUFFER_SIZE);
@@ -81,7 +82,7 @@ int main(int argc, char** argv) {
                             statuscode = HTTP_LEVEL_200;
                         }
                     }
-                    write(client_info.sock_fd, gen_response(file_ptr, statuscode), 4096); // TODO: Iwie Softcoden
+                    write(client_info.sock_fd, gen_response(file_ptr, statuscode, &resp_size), (size_t)resp_size);
                     close(client_info.sock_fd);
                     break;
                 }
@@ -127,20 +128,14 @@ int server_opendir(char *dir)
 int server_start(char *dir, int port, socket_info* si)
 {
     int reuse = 1;
-    if(chdir(dir) != 0)
-    {
-        printf("Couldn't start server in: %s\n", dir);
+    if(chdir(dir) != 0) {
+        printf("Can't start server in%s, is directory existing?\n", dir);
         return(ERR_DIR);
     }
 
-    if((si->sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        printf("Can't open socket: %i\n", si->sock_fd);
-        return(ERR_SOCK_OPEN);
-    }
-
     //setsockopt(Socket Descriptor, Option level, Reuse already used socket, option name, option value, option value length)
-    if(setsockopt(si->sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0){
-        printf("Cant set socket options\n");
+    if((si->sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 || setsockopt(si->sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0){
+        printf("Cant initialize socket\n");
         return(ERR_SOCK_SET_OPT);
     }
 
@@ -150,7 +145,7 @@ int server_start(char *dir, int port, socket_info* si)
     si->addr.sin_addr.s_addr = htonl(INADDR_ANY);
     si->addr.sin_port = htons(port);
     if(bind(si->sock_fd, (struct sockaddr*) &si->addr, sizeof(si->addr)) < 0){
-        printf("Can't bind local address\n");
+        printf("Can't open socket on %d, is socket already in use?\n", port);
         return(ERR_SOCK_NO_BIND);
     }
 
@@ -178,7 +173,7 @@ void read_header_data(client_header* src, char* input_string){
  *
  * @return Pointer to char array containing the response.
  */
-char* gen_response(FILE* file_ptr, int statuscode){
+char* gen_response(FILE* file_ptr, int statuscode, long* resp_size){
     char* header = NULL;
     char* content = NULL;
     char* response = NULL;
@@ -194,8 +189,8 @@ char* gen_response(FILE* file_ptr, int statuscode){
 
     // Generate header
     gen_header(&header, statuscode, file_meta);
-
-    response = (char*)malloc(file_meta.file_size+(strlen(header)*sizeof(char)));
+    *resp_size = file_meta.file_size+(strlen(header)*sizeof(char));
+    response = (char*)malloc((size_t)*resp_size);
     sprintf(response, "%s\n%s", header, content);
     return response;
 }

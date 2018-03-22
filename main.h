@@ -44,7 +44,7 @@ int server_start(char* dir, int port, socket_info* si);
 
 void read_header_data(client_header* src, char* input_string);
 
-char* gen_response(FILE* file_ptr, int statuscode);
+char* gen_response(FILE* file_ptr, int statuscode, long* resp_size);
 
 void gen_header(char **header, int status_response, file_info file_data);
 
