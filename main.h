@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h>
 
 #include "http_protocol.h"
 
@@ -18,7 +19,6 @@
 
 #define ERR_PARAM 2
 #define ERR_DIR 3
-#define ERR_SOCK_OPEN 4
 #define ERR_SOCK_SET_OPT 5
 #define ERR_SOCK_NO_BIND 6
 #define ERR_ALLOC 7
@@ -43,11 +43,13 @@ typedef struct{
 
 void process_request(char* request_header, socket_info* client_info);
 
+void read_dir(DIR* dir_ptr, char** content, file_info* file_meta) ;
+
 int server_start(char* dir, int port, socket_info* si);
 
 void read_header_data(client_header* src, char* input_string);
 
-char* gen_response(FILE* file_ptr, int statuscode, long* resp_size);
+char* gen_response(FILE* file_ptr, DIR* dir_ptr, int statuscode, long* resp_size);
 
 void gen_header(char **header, int status_response, file_info* file_data);
 

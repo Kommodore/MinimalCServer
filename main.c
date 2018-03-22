@@ -71,61 +71,56 @@ int main(int argc, char** argv) {
     }
 }
 
+/**
+ * Method called after the client request has been retrieved
+ *
+ * @param request_header The complete header as a start.
+ * @param client_info Socket info required to send the response to the client.
+ */
 void process_request(char* request_header, socket_info* client_info){
-    client_header client_data;
     int statuscode;
-    long resp_size;
+    long resp_size = 0;
+    char* output = NULL;
     FILE* file_ptr = NULL;
+    DIR* dir_ptr = NULL;
+    client_header client_data;
 
     read_header_data(&client_data, request_header);
 
     if(strcmp(client_data.method, "GET") != 0){
-        statuscode = HTTP_LEVEL_500+1;
+        output = gen_response(file_ptr, NULL, HTTP_LEVEL_500+1, &resp_size);
     } else {
         struct stat file_stat;
+        printf("Opening %s\n", client_data.file);
         if(stat(client_data.file, &file_stat) < 0){
-            statuscode = HTTP_LEVEL_400+4;
+            if(errno == EACCES){
+                printf("No access\n");
+                statuscode = HTTP_LEVEL_400+1;
+            } else {
+                printf("No file found stat\n");
+                statuscode = HTTP_LEVEL_400+4;
+            }
         } else {
             if(S_ISDIR(file_stat.st_mode)){
-                statuscode = HTTP_LEVEL_200;
+                dir_ptr = opendir(client_data.file);
+                file_ptr = NULL;
+                statuscode = 200;
             } else {
                 file_ptr = fopen(client_data.file, "r+");
                 if(file_ptr == NULL){
+                    printf("No file found fopen\n");
                     statuscode = HTTP_LEVEL_400+4;
-                    fclose(file_ptr);
                 } else {
+                    printf("All clear\n");
                     statuscode = HTTP_LEVEL_200;
                 }
             }
         }
+        output = gen_response(file_ptr, dir_ptr, statuscode, &resp_size);
     }
-    write(client_info->sock_fd, gen_response(file_ptr, statuscode, &resp_size), (size_t)resp_size);
+    printf("Outputting\n%s\nwith %li bytes\n", output, resp_size);
+    write(client_info->sock_fd, output, (size_t)resp_size);
     close(client_info->sock_fd);
-}
-
-/**
- * Prints all folders in directory
- */
-int server_opendir(char *dir)
-{
-    DIR *dirp;
-    struct dirent *dp;
-
-    if((dirp = opendir(dir)) == NULL)
-    {
-        printf("The directory: %s does not exist!\n", dir);
-        return 0;
-    }
-
-    do
-    {
-        if((dp = readdir(dirp)) != NULL)
-        {
-            printf("Dir: %s\n", dp->d_name);
-        }
-    } while (dp != NULL);
-
-    return 1;
 }
 
 /**
@@ -179,7 +174,7 @@ void read_header_data(client_header* src, char* input_string){
  *
  * @return Pointer to char array containing the response.
  */
-char* gen_response(FILE* file_ptr, int statuscode, long* resp_size){
+char* gen_response(FILE* file_ptr, DIR* dir_ptr, int statuscode, long* resp_size){
     char* header = NULL;
     char* content = NULL;
     char* response = NULL;
@@ -189,8 +184,13 @@ char* gen_response(FILE* file_ptr, int statuscode, long* resp_size){
     if(statuscode != 200){
         read_error(statuscode, &content, &file_meta);
     } else {
-        read_file(file_ptr, &content, &file_meta);
-        //strcpy(file_meta.content_type, "image/jpeg"); // TODO: Bei Image ändern?
+        if(file_ptr == NULL && dir_ptr != NULL){
+            fclose(file_ptr);
+            read_dir(dir_ptr, &content, &file_meta);
+        } else if(file_ptr != NULL && dir_ptr == NULL){
+            read_file(file_ptr, &content, &file_meta);
+            //strcpy(file_meta.content_type, "image/jpeg"); // TODO: Bei Image ändern?
+        }
     }
 
     // Generate header
@@ -225,6 +225,17 @@ void gen_header(char **header, int status_response, file_info* file_data) {
     sprintf(*header, "HTTP/1.1 %s\nDate: %s\nLast-Modified: %s\nContent-Language: %s\nContent-Type: %s; charset=%s\n",
             status_lines[status_response], curr_time, file_data->modify_date, lang, file_data->content_type, char_set);
     printf("RESPONSE:\n%s", *header);
+}
+
+void read_dir(DIR* dir_ptr, char** content, file_info* file_meta) { //TODO: File meta
+    struct dirent *dir_item;
+    *content = (char*)malloc(4096);
+
+    do {
+        if((dir_item = readdir(dir_ptr)) != NULL && strcmp(dir_item->d_name, ".") != 0 && strcmp(dir_item->d_name, "..") != 0) {
+            sprintf(content, "<a href=\"./%s\">%s</a><br>", dir_item->d_name, dir_item->d_name);
+        }
+    } while (dir_item != NULL);
 }
 
 /**
