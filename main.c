@@ -59,11 +59,10 @@ int main(int argc, char** argv) {
 
                 // If n is smaller than 256, we got all needed data and process the request
                 if(read_bytes < HEADER_BUFFER_SIZE) {
-                    process_request(client_header_data, &client_info);
+                    process_request(client_header_data, &client_info, doc_root);
                     break;
                 }
             }
-            return 0;
         }
     } else {
         printf("Failed to start server with error code %i\n", error_code);
@@ -77,46 +76,36 @@ int main(int argc, char** argv) {
  * @param request_header The complete header as a start.
  * @param client_info Socket info required to send the response to the client.
  */
-void process_request(char* request_header, socket_info* client_info){
-    int statuscode;
+void process_request(const char* request_header, socket_info* client_info, const char* doc_root){
+    int statuscode = HTTP_OK, is_dir = 0;
     long resp_size = 0;
     char* output = NULL;
-    FILE* file_ptr = NULL;
-    DIR* dir_ptr = NULL;
     client_header client_data;
 
-    read_header_data(&client_data, request_header);
+    read_header_data(&client_data, request_header, doc_root);
 
     if(strcmp(client_data.method, "GET") != 0){
-        output = gen_response(file_ptr, NULL, HTTP_LEVEL_500+1, &resp_size);
+        output = gen_response(client_data.file, is_dir, HTTP_LEVEL_500+1, &resp_size);
     } else {
         struct stat file_stat;
-        printf("Opening %s\n", client_data.file);
         if(stat(client_data.file, &file_stat) < 0){
             if(errno == EACCES){
-                printf("No access\n");
                 statuscode = HTTP_LEVEL_400+1;
             } else {
-                printf("No file found stat\n");
                 statuscode = HTTP_LEVEL_400+4;
             }
         } else {
             if(S_ISDIR(file_stat.st_mode)){
-                dir_ptr = opendir(client_data.file);
-                file_ptr = NULL;
-                statuscode = 200;
+                is_dir = 1;
             } else {
-                file_ptr = fopen(client_data.file, "r+");
+                FILE* file_ptr = fopen(client_data.file, "r");
                 if(file_ptr == NULL){
-                    printf("No file found fopen\n");
                     statuscode = HTTP_LEVEL_400+4;
-                } else {
-                    printf("All clear\n");
-                    statuscode = HTTP_LEVEL_200;
                 }
+                fclose(file_ptr);
             }
         }
-        output = gen_response(file_ptr, dir_ptr, statuscode, &resp_size);
+        output = gen_response(client_data.file, is_dir, statuscode, &resp_size);
     }
     printf("Outputting\n%s\nwith %li bytes\n", output, resp_size);
     write(client_info->sock_fd, output, (size_t)resp_size);
@@ -126,7 +115,7 @@ void process_request(char* request_header, socket_info* client_info){
 /**
  * Starts server in docroot dir
  */
-int server_start(char *dir, int port, socket_info* si)
+int server_start(const char *dir, int port, socket_info* si)
 {
     int reuse = 1;
     if(chdir(dir) != 0) {
@@ -159,11 +148,18 @@ int server_start(char *dir, int port, socket_info* si)
  * @param src The struct to fill with the data.
  * @param input_string The header data as a string.
  */
-void read_header_data(client_header* src, char* input_string){
+void read_header_data(client_header* src, const char* input_string, const char* doc_root){
+    char buffer[256];
     printf("REQUEST:\n%s", input_string);
     memset((void*)src->file, '\0', 256);
     memset((void*)src->method, '\0', 16);
-    sscanf(input_string, "%s %s HTTP1.1", src->method, src->file);
+    strcpy(src->file, doc_root);
+    sscanf(input_string, "%s %s HTTP1.1", src->method, buffer);
+    if(buffer[1] != '\0'){ // Removing unnecessary slash
+        memmove(buffer, buffer+1, 255);
+        strcat(src->file, buffer);
+    }
+    printf("Accessing %s",src->file);
 }
 
 /**
@@ -174,21 +170,20 @@ void read_header_data(client_header* src, char* input_string){
  *
  * @return Pointer to char array containing the response.
  */
-char* gen_response(FILE* file_ptr, DIR* dir_ptr, int statuscode, long* resp_size){
+char* gen_response(const char* file_path, int is_dir, int statuscode, long* resp_size){
     char* header = NULL;
     char* content = NULL;
     char* response = NULL;
     file_info file_meta = {.content_type = "text/html", .file_size = 0, .modify_date = ""};
 
     // Generate content
-    if(statuscode != 200){
+    if(statuscode != HTTP_OK){
         read_error(statuscode, &content, &file_meta);
     } else {
-        if(file_ptr == NULL && dir_ptr != NULL){
-            fclose(file_ptr);
-            read_dir(dir_ptr, &content, &file_meta);
-        } else if(file_ptr != NULL && dir_ptr == NULL){
-            read_file(file_ptr, &content, &file_meta);
+        if(is_dir == 1){
+            read_dir(file_path, &content, &file_meta);
+        } else {
+            read_file(file_path, &content, &file_meta);
             //strcpy(file_meta.content_type, "image/jpeg"); // TODO: Bei Image ändern?
         }
     }
@@ -197,6 +192,7 @@ char* gen_response(FILE* file_ptr, DIR* dir_ptr, int statuscode, long* resp_size
     gen_header(&header, statuscode, &file_meta);
     *resp_size = file_meta.file_size+(strlen(header)*sizeof(char));
     response = (char*)malloc((size_t)*resp_size);
+    memset((void*)response, '\0', *resp_size);
     sprintf(response, "%s\n%s", header, content);
     return response;
 }
@@ -212,7 +208,7 @@ void gen_header(char **header, int status_response, file_info* file_data) {
     char char_set[32], curr_time[32], lang[3];
 
     time_t raw_time = time(NULL);
-    strftime(curr_time, 32, "%a, %d %b %Y %T %Z", gmtime(&raw_time));
+    strftime(curr_time, 64, "%a, %d %b %Y %T %Z", gmtime(&raw_time));
     strcpy(char_set, "iso-8859-1");
     strcpy(lang, "de");
 
@@ -227,15 +223,28 @@ void gen_header(char **header, int status_response, file_info* file_data) {
     printf("RESPONSE:\n%s", *header);
 }
 
-void read_dir(DIR* dir_ptr, char** content, file_info* file_meta) { //TODO: File meta
+/**
+ * Method to read a directory and return it's contents as a list.
+ *
+ * @param dir_ptr The directory stream.
+ * @param content The variable that should contain the result
+ * @param file_meta File meta data. Used to set the size.
+ */
+void read_dir(const char* file_path, char** content, file_info* file_meta) {  // TODO: Hardecodede filesize entfernen
+    DIR* dir_ptr = opendir(file_path);
     struct dirent *dir_item;
-    *content = (char*)malloc(4096);
-
+    char buffer[256];
+    char* files = (char*)malloc(130000*sizeof(char));
+    *content = (char*)malloc(130000*sizeof(char));
     do {
         if((dir_item = readdir(dir_ptr)) != NULL && strcmp(dir_item->d_name, ".") != 0 && strcmp(dir_item->d_name, "..") != 0) {
-            sprintf(content, "<a href=\"./%s\">%s</a><br>", dir_item->d_name, dir_item->d_name);
+            sprintf(buffer, "<li><a href=\"./%s\">%s</a></li>", dir_item->d_name, dir_item->d_name);
+            strcat(files, buffer);
         }
     } while (dir_item != NULL);
+    sprintf(*content, "<!DOCTYPE html><html><head><title>Index of %s</title></head><body><h1>Index of %s</h1><ul>%s</ul></body></html>", file_path, file_path, files);
+    closedir(dir_ptr);
+    file_meta->file_size = 130000;
 }
 
 /**
@@ -245,12 +254,13 @@ void read_dir(DIR* dir_ptr, char** content, file_info* file_meta) { //TODO: File
  * @param content Pointer to the location where the content should be saved.
  * @param file_meta Pointer to the struct containing meta data.
  */
-void read_file(FILE* file_ptr, char** content, file_info* file_meta) {
+void read_file(const char* file_path, char** content, file_info* file_meta) {
+    FILE* file_ptr = fopen(file_path, "r");
     fseek(file_ptr, 0, SEEK_END);
     file_meta->file_size = ftell(file_ptr);
     rewind(file_ptr);
     *content = (char*) malloc((size_t) file_meta->file_size);
-    fread(content, sizeof(char), (size_t) file_meta->file_size, file_ptr);
+    fread(content, sizeof(char), (size_t) file_meta->file_size, file_ptr); // TODO: Error entfernen
     fclose(file_ptr);
 }
 
