@@ -69,19 +69,18 @@ int main(int argc, char** argv) {
                     FILE* file_ptr = NULL;
 
                     read_header_data(&client_data, client_header_data);
-                    printf("Method: %s, File: %s\n",client_data.method, client_data.file);
 
                     if(strcmp(client_data.method, "GET") != 0){
-                        statuscode = 501;
+                        statuscode = HTTP_LEVEL_500+1;
                     } else {
                         file_ptr = fopen(client_data.file, "r+");
                         if(file_ptr == NULL){
-                            statuscode = 404;
+                            statuscode = HTTP_LEVEL_400+4;
                         } else {
-                            statuscode = 200;
+                            statuscode = HTTP_LEVEL_200;
                         }
                     }
-                    write(client_info.sock_fd, gen_response(file_ptr, statuscode), HEADER_BUFFER_SIZE);
+                    write(client_info.sock_fd, gen_response(file_ptr, statuscode), 4096); // TODO: Iwie Softcoden
                     close(client_info.sock_fd);
                     break;
                 }
@@ -160,6 +159,7 @@ int server_start(char *dir, int port, socket_info* si)
 }
 
 void read_header_data(client_header* src, char* input_string){
+    printf("REQUEST:\n%s\n", input_string);
     memset((void*)src->file, '\0', 256);
     memset((void*)src->method, '\0', 16);
     sscanf(input_string, "%s %s HTTP1.1", src->method, src->file);
@@ -174,28 +174,14 @@ char* gen_response(FILE* file_ptr, int statuscode){
 
     header = (char*)malloc(sizeof(char)*256);
 
-    server_data.status_code = statuscode;
+    server_data.status_message = statuscode;
     strcpy(server_data.charSet, "iso-8859-1");
     strcpy(server_data.lang, "de");
 
-    if(statuscode != 200){ds
-        if(get_status_message(statuscode) != NULL) {
-            char error_file[256];
-            sprintf(error_file, "/etc/CMiniServer/error_pages/error_%d.html", statuscode);
-            file_ptr = fopen(error_file, "r+");
-        }
-
-        if(file_ptr == NULL){
-            printf("Couldn't find status code or error file for %d\n",statuscode);
-            file_ptr = fopen("/etc/CMiniServer/error_pages/error_404.html", "r+");
-        }
-    }
-
-    if(file_ptr == NULL){
-        file_size = sizeof(char)*256;
-        content = (char*)malloc((size_t)file_size);
-
-        strcpy(content, "<h1>No error file found. Please contact the administrator.</h1>");
+    if(statuscode != 200){
+        file_size = sizeof(char)*1024;
+        content = (char*) malloc((size_t)file_size);
+        strcpy(content, get_error_string(statuscode));
     } else {
         // Read file into content
         fseek(file_ptr, 0, SEEK_END);
@@ -209,14 +195,13 @@ char* gen_response(FILE* file_ptr, int statuscode){
     gen_header(header, server_data);
     response = (char*)malloc(file_size+strlen(header)*sizeof(char));
     sprintf(response, "%s\n%s", header, content);
-
     return response;
 }
 
 // TODO: gmttime() oder localtime(), content type und last modified
 void gen_header(char *header, server_header header_data)
 {
-    sprintf(header, "HTTP/1.1 %d %s\nDate: Tue, 20 Mar 2018 15:06:52 GMT\nLast-Modified: Tue, 20 Mar 2018 14:06:52 GMT\nContent-Language: de\nContent-Type: text/html; charset=iso-8859-1\n",
-            header_data.status_code, get_status_message(header_data.status_code));
+    sprintf(header, "HTTP/1.1 %s\nDate: Tue, 20 Mar 2018 15:06:52 GMT\nLast-Modified: Tue, 20 Mar 2018 14:06:52 GMT\nContent-Language: de\nContent-Type: text/html; charset=iso-8859-1\n",
+            status_lines[header_data.status_message]);
     printf("RESPONSE: %s", header);
 }

@@ -10,7 +10,7 @@
 #include <dirent.h>
 #include <unistd.h>
 
-#include "httpStatusCodes.h"
+#include "http_protocol.h"
 
 #define HEADER_BUFFER_SIZE 256
 
@@ -29,7 +29,7 @@ typedef struct
 } socket_info;
 
 typedef struct {
-    int status_code;
+    int status_message;
     char* curr_date;
     char* mod_date;
     char lang[3];

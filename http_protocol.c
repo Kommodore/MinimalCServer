@@ -1,110 +1,20 @@
-static const char * const status_lines[RESPONSE_CODES] =
-        {
-                "100 Continue",
-                "101 Switching Protocols",
-                "102 Processing",
-#define LEVEL_200  3
-                "200 OK",
-                "201 Created",
-                "202 Accepted",
-                "203 Non-Authoritative Information",
-                "204 No Content",
-                "205 Reset Content",
-                "206 Partial Content",
-                "207 Multi-Status",
-                "208 Already Reported",
-                NULL, /* 209 */
-                NULL, /* 210 */
-                NULL, /* 211 */
-                NULL, /* 212 */
-                NULL, /* 213 */
-                NULL, /* 214 */
-                NULL, /* 215 */
-                NULL, /* 216 */
-                NULL, /* 217 */
-                NULL, /* 218 */
-                NULL, /* 219 */
-                NULL, /* 220 */
-                NULL, /* 221 */
-                NULL, /* 222 */
-                NULL, /* 223 */
-                NULL, /* 224 */
-                NULL, /* 225 */
-                "226 IM Used",
-#define LEVEL_300 30
-                "300 Multiple Choices",
-                "301 Moved Permanently",
-                "302 Found",
-                "303 See Other",
-                "304 Not Modified",
-                "305 Use Proxy",
-                NULL, /* 306 */
-                "307 Temporary Redirect",
-                "308 Permanent Redirect",
-#define LEVEL_400 39
-                "400 Bad Request",
-                "401 Unauthorized",
-                "402 Payment Required",
-                "403 Forbidden",
-                "404 Not Found",
-                "405 Method Not Allowed",
-                "406 Not Acceptable",
-                "407 Proxy Authentication Required",
-                "408 Request Timeout",
-                "409 Conflict",
-                "410 Gone",
-                "411 Length Required",
-                "412 Precondition Failed",
-                "413 Request Entity Too Large",
-                "414 Request-URI Too Long",
-                "415 Unsupported Media Type",
-                "416 Requested Range Not Satisfiable",
-                "417 Expectation Failed",
-                NULL, /* 418 */
-                NULL, /* 419 */
-                NULL, /* 420 */
-                "421 Misdirected Request",
-                "422 Unprocessable Entity",
-                "423 Locked",
-                "424 Failed Dependency",
-                NULL, /* 425 */
-                "426 Upgrade Required",
-                NULL, /* 427 */
-                "428 Precondition Required",
-                "429 Too Many Requests",
-                NULL, /* 430 */
-                "431 Request Header Fields Too Large",
-                NULL, /* 432 */
-                NULL, /* 433 */
-                NULL, /* 434 */
-                NULL, /* 435 */
-                NULL, /* 436 */
-                NULL, /* 437 */
-                NULL, /* 438 */
-                NULL, /* 439 */
-                NULL, /* 440 */
-                NULL, /* 441 */
-                NULL, /* 442 */
-                NULL, /* 443 */
-                NULL, /* 444 */
-                NULL, /* 445 */
-                NULL, /* 446 */
-                NULL, /* 447 */
-                NULL, /* 448 */
-                NULL, /* 449 */
-                NULL, /* 450 */
-                "451 Unavailable For Legal Reasons",
-#define LEVEL_500 91
-                "500 Internal Server Error",
-                "501 Not Implemented",
-                "502 Bad Gateway",
-                "503 Service Unavailable",
-                "504 Gateway Timeout",
-                "505 HTTP Version Not Supported",
-                "506 Variant Also Negotiates",
-                "507 Insufficient Storage",
-                "508 Loop Detected",
-                NULL, /* 509 */
-                "510 Not Extended",
-                "511 Network Authentication Required"
-        };
+#include "http_protocol.h"
+
+const char* get_error_string(int status_code){
+    char* error = malloc(sizeof(char)*512);
+    sprintf(error, "<!DOCTYPE html><html><header><title>%s</title></head><body><h1>%s</h1>", status_lines[status_code], status_lines[status_code]);
+
+    switch(status_code){
+        case HTTP_NOT_FOUND:
+            strcat(error, "<p>The requested URL [URL] was not found on this server.</p>\n");
+            break;
+        default:
+            strcat(error, "<p>The server encountered an internal error or misconfiguration and was unable to complete your request.</p>\n"
+                    "<p>Please contact the server administrator at [MAIL] to inform them of the time this error occurred, and the actions you performed just before this error.</p>\n"
+                    "<p>More information about this error may be available\nin the server error log.</p>");
+    }
+
+
+    strcat(error, "<hr><p>Super Duper Server 1.0.0 at <i>[HOST]</i></p></body></html>");
+    return error;
+}
