@@ -29,15 +29,6 @@ typedef struct
 } socket_info;
 
 typedef struct {
-    int status_message;
-    char* curr_date;
-    char* mod_date;
-    char lang[3];
-    char type[128];
-    char charSet[16];
-} server_header;
-
-typedef struct {
     char method[16];
     char file[256];
 } client_header;
@@ -48,6 +39,6 @@ void read_header_data(client_header* src, char* input_string);
 
 char* gen_response(FILE* file_ptr, int statuscode);
 
-void gen_header(char *header, server_header header_data);
+void gen_header(char *header, int status_code, char* content_type);
 
 #endif //VERTEILTESYSTEME_PRAKTIKUM2_MAIN_H

@@ -1,5 +1,9 @@
 #include "main.h"
 
+void read_file(FILE* file_ptr, char** content, long* size);
+
+void read_error(int statuscode, char** content, long* size);
+
 int main(int argc, char** argv) {
 
     int error_code = 0;
@@ -72,10 +76,11 @@ int main(int argc, char** argv) {
 
                     if(strcmp(client_data.method, "GET") != 0){
                         statuscode = HTTP_LEVEL_500+1;
-                    } else {
+                    } else { //TODO: isDir
                         file_ptr = fopen(client_data.file, "r+");
                         if(file_ptr == NULL){
                             statuscode = HTTP_LEVEL_400+4;
+                            fclose(file_ptr);
                         } else {
                             statuscode = HTTP_LEVEL_200;
                         }
@@ -87,9 +92,7 @@ int main(int argc, char** argv) {
             }
             return 0;
         }
-
-    } else
-    {
+    } else {
         printf("Failed to start server with error code %i\n", error_code);
         exit(error_code);
     }
@@ -159,7 +162,7 @@ int server_start(char *dir, int port, socket_info* si)
 }
 
 void read_header_data(client_header* src, char* input_string){
-    printf("REQUEST:\n%s\n", input_string);
+    printf("REQUEST:\n%s", input_string);
     memset((void*)src->file, '\0', 256);
     memset((void*)src->method, '\0', 16);
     sscanf(input_string, "%s %s HTTP1.1", src->method, src->file);
@@ -167,41 +170,53 @@ void read_header_data(client_header* src, char* input_string){
 
 char* gen_response(FILE* file_ptr, int statuscode){
     char* header;
-    char* content;
+    char* content = NULL;
     char* response;
-    long file_size;
-    server_header server_data;
+    long file_size = 0;
+    char content_type[256];
 
     header = (char*)malloc(sizeof(char)*256);
+    strcpy(content_type, "text/html");
 
-    server_data.status_message = statuscode;
-    strcpy(server_data.charSet, "iso-8859-1");
-    strcpy(server_data.lang, "de");
-
+    // Generate content
     if(statuscode != 200){
-        file_size = sizeof(char)*1024;
-        content = (char*) malloc((size_t)file_size);
-        strcpy(content, get_error_string(statuscode));
+        read_error(statuscode, &content, &file_size);
     } else {
-        // Read file into content
-        fseek(file_ptr, 0, SEEK_END);
-        file_size = ftell(file_ptr);
-        rewind(file_ptr);
-        content = (char*) malloc((size_t) file_size);
-        fread(content, sizeof(char), (size_t) file_size, file_ptr);
+        read_file(file_ptr, &content, &file_size);
     }
 
-    fclose(file_ptr);
-    gen_header(header, server_data);
+    // Generate header
+    gen_header(header, statuscode, content_type);
+
     response = (char*)malloc(file_size+strlen(header)*sizeof(char));
     sprintf(response, "%s\n%s", header, content);
     return response;
 }
 
 // TODO: gmttime() oder localtime(), content type und last modified
-void gen_header(char *header, server_header header_data)
+void gen_header(char *header, int status_code, char* content_type)
 {
-    sprintf(header, "HTTP/1.1 %s\nDate: Tue, 20 Mar 2018 15:06:52 GMT\nLast-Modified: Tue, 20 Mar 2018 14:06:52 GMT\nContent-Language: de\nContent-Type: text/html; charset=iso-8859-1\n",
-            status_lines[header_data.status_message]);
-    printf("RESPONSE: %s", header);
+    char char_set[32], lang[3];
+
+    strcpy(char_set, "iso-8859-1");
+    strcpy(lang, "de");
+
+    sprintf(header, "HTTP/1.1 %s\nDate: Tue, 20 Mar 2018 15:06:52 GMT\nLast-Modified: Tue, 20 Mar 2018 14:06:52 GMT\nContent-Language: %s\nContent-Type: %s; charset=%s\n",
+            status_lines[status_code], lang, content_type, char_set);
+    printf("RESPONSE:\n%s", header);
+}
+
+void read_file(FILE* file_ptr, char** content, long* size){
+    fseek(file_ptr, 0, SEEK_END);
+    *size = ftell(file_ptr);
+    rewind(file_ptr);
+    *content = (char*) malloc((size_t) *size);
+    fread(content, sizeof(char), (size_t) *size, file_ptr);
+    fclose(file_ptr);
+}
+
+void read_error(int statuscode, char** content, long* size){
+    *size = sizeof(char)*1024;
+    *content = (char*) malloc((size_t)*size);
+    strcpy(*content, get_error_string(statuscode));
 }
