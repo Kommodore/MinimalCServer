@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
@@ -39,6 +40,8 @@ typedef struct{
     char content_type[32];
     char modify_date[32];
 } file_info;
+
+void process_request(char* request_header, socket_info client_info);
 
 int server_start(char* dir, int port, socket_info* si);
 

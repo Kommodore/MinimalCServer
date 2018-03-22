@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <memory.h>
 
+#define HTTP_FORBIDDEN (HTTP_LEVEL_400+1)
 #define HTTP_NOT_FOUND (HTTP_LEVEL_400+4)
 
 #define RESPONSE_CODES 8

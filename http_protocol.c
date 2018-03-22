@@ -8,6 +8,8 @@ const char* get_error_string(int status_code){
         case HTTP_NOT_FOUND:
             strcat(error, "<p>The requested URL [URL] was not found on this server.</p>\n");
             break;
+        case HTTP_FORBIDDEN:
+            strcat(error, "<p>You don't have permission to access [URL] on this server.</p>\n");
         default:
             strcat(error, "<p>The server encountered an internal error or misconfiguration and was unable to complete your request.</p>\n"
                     "<p>Please contact the server administrator at [MAIL] to inform them of the time this error occurred, and the actions you performed just before this error.</p>\n"

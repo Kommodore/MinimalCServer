@@ -25,9 +25,8 @@ int main(int argc, char** argv) {
         // Start a new thread for each request.
         for(;;){
             ssize_t read_bytes;
-            char *client_header_data;
+            char *client_header_data = NULL;
             char input_buffer[HEADER_BUFFER_SIZE], output_buffer[HEADER_BUFFER_SIZE];
-            client_header client_data;
 
             client_info.addr_len = sizeof(client_info.addr);
             client_info.sock_fd = accept(server_info.sock_fd, (struct sockaddr*) &client_info.addr, (socklen_t*) &client_info.addr_len);
@@ -41,17 +40,12 @@ int main(int argc, char** argv) {
             memset((void*)output_buffer, '\0', HEADER_BUFFER_SIZE);
 
             // Cycle as long as the client sends a message
-            for(int iterations = 0;; iterations++)
-            {
-                long resp_size;
+            for(int iterations = 0;; iterations++) {
                 // Alloc enough memory to store whole input string;
                 if(iterations == 0){
                     client_header_data = (char*)malloc(sizeof(char)*HEADER_BUFFER_SIZE);
                 } else {
-                    #pragma clang diagnostic push
-                    #pragma clang diagnostic ignored "-Wuninitialized"
                     client_header_data = (char*)realloc(client_header_data, sizeof(client_header_data)*2);
-                    #pragma clang diagnostic pop
                 }
                 if(client_header_data == NULL){
                     printf("Error while parsing request\n");
@@ -63,27 +57,9 @@ int main(int argc, char** argv) {
                 read_bytes = read(client_info.sock_fd, input_buffer, HEADER_BUFFER_SIZE);
                 strcat(client_header_data, input_buffer);
 
-                // If n is smaller than 256, we got all needed data and can break
-                if(read_bytes < HEADER_BUFFER_SIZE)
-                {
-                    int statuscode;
-                    FILE* file_ptr = NULL;
-
-                    read_header_data(&client_data, client_header_data);
-
-                    if(strcmp(client_data.method, "GET") != 0){
-                        statuscode = HTTP_LEVEL_500+1;
-                    } else { //TODO: isDir
-                        file_ptr = fopen(client_data.file, "r+");
-                        if(file_ptr == NULL){
-                            statuscode = HTTP_LEVEL_400+4;
-                            fclose(file_ptr);
-                        } else {
-                            statuscode = HTTP_LEVEL_200;
-                        }
-                    }
-                    write(client_info.sock_fd, gen_response(file_ptr, statuscode, &resp_size), (size_t)resp_size);
-                    close(client_info.sock_fd);
+                // If n is smaller than 256, we got all needed data and process the request
+                if(read_bytes < HEADER_BUFFER_SIZE) {
+                    process_request(client_header_data, client_info);
                     break;
                 }
             }
@@ -93,8 +69,39 @@ int main(int argc, char** argv) {
         printf("Failed to start server with error code %i\n", error_code);
         exit(error_code);
     }
+}
 
+void process_request(char* request_header, socket_info client_info){
+    client_header client_data;
+    int statuscode;
+    long resp_size;
+    FILE* file_ptr = NULL;
 
+    read_header_data(&client_data, request_header);
+
+    if(strcmp(client_data.method, "GET") != 0){
+        statuscode = HTTP_LEVEL_500+1;
+    } else {
+        printf("Opening %s",client_data.file);
+        struct stat file_stat;
+        if(stat(client_data.file, &file_stat) < 0){
+            statuscode = HTTP_LEVEL_400+4;
+        } else {
+            if(S_ISDIR(file_stat.st_mode)){
+                statuscode = HTTP_LEVEL_200;
+            } else {
+                file_ptr = fopen(client_data.file, "r+");
+                if(file_ptr == NULL){
+                    statuscode = HTTP_LEVEL_400+4;
+                    fclose(file_ptr);
+                } else {
+                    statuscode = HTTP_LEVEL_200;
+                }
+            }
+        }
+    }
+    write(client_info.sock_fd, gen_response(file_ptr, statuscode, &resp_size), (size_t)resp_size);
+    close(client_info.sock_fd);
 }
 
 /**
