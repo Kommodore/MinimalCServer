@@ -9,6 +9,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "http_protocol.h"
 
@@ -33,12 +34,22 @@ typedef struct {
     char file[256];
 } client_header;
 
+typedef struct{
+    long file_size;
+    char content_type[32];
+    char modify_date[32];
+} file_info;
+
 int server_start(char* dir, int port, socket_info* si);
 
 void read_header_data(client_header* src, char* input_string);
 
 char* gen_response(FILE* file_ptr, int statuscode);
 
-void gen_header(char *header, int status_code, char* content_type);
+void gen_header(char **header, int status_response, file_info file_data);
+
+void read_file(FILE* file_ptr, char** content, file_info* file_meta);
+
+void read_error(int statuscode, char** content, file_info* file_meta);
 
 #endif //VERTEILTESYSTEME_PRAKTIKUM2_MAIN_H

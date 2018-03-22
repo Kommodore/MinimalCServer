@@ -1,9 +1,5 @@
 #include "main.h"
 
-void read_file(FILE* file_ptr, char** content, long* size);
-
-void read_error(int statuscode, char** content, long* size);
-
 int main(int argc, char** argv) {
 
     int error_code = 0;
@@ -161,6 +157,12 @@ int server_start(char *dir, int port, socket_info* si)
     return 0;
 }
 
+/**
+ * Method to read the data from the incoming header.
+ *
+ * @param src The struct to fill with the data.
+ * @param input_string The header data as a string.
+ */
 void read_header_data(client_header* src, char* input_string){
     printf("REQUEST:\n%s", input_string);
     memset((void*)src->file, '\0', 256);
@@ -168,55 +170,87 @@ void read_header_data(client_header* src, char* input_string){
     sscanf(input_string, "%s %s HTTP1.1", src->method, src->file);
 }
 
+/**
+ * Method responsible for assembling the server response
+ *
+ * @param file_ptr File stream of the file to open.
+ * @param statuscode The status code of the outgoing http header.
+ *
+ * @return Pointer to char array containing the response.
+ */
 char* gen_response(FILE* file_ptr, int statuscode){
-    char* header;
+    char* header = NULL;
     char* content = NULL;
-    char* response;
-    long file_size = 0;
-    char content_type[256];
-
-    header = (char*)malloc(sizeof(char)*256);
-    strcpy(content_type, "text/html");
+    char* response = NULL;
+    file_info file_meta = {.content_type = "text/html", .file_size = 0, .modify_date = ""};
 
     // Generate content
     if(statuscode != 200){
-        read_error(statuscode, &content, &file_size);
+        read_error(statuscode, &content, &file_meta);
     } else {
-        read_file(file_ptr, &content, &file_size);
+        read_file(file_ptr, &content, &file_meta);
+        //strcpy(file_meta.content_type, "image/jpeg"); // TODO: Bei Image ändern?
     }
 
     // Generate header
-    gen_header(header, statuscode, content_type);
+    gen_header(&header, statuscode, file_meta);
 
-    response = (char*)malloc(file_size+strlen(header)*sizeof(char));
+    response = (char*)malloc(file_meta.file_size+(strlen(header)*sizeof(char)));
     sprintf(response, "%s\n%s", header, content);
     return response;
 }
 
-// TODO: gmttime() oder localtime(), content type und last modified
-void gen_header(char *header, int status_code, char* content_type)
-{
-    char char_set[32], lang[3];
+/**
+ * Method that generates the header of the response.
+ *
+ * @param header The pointer to the char array where the header should be written to.
+ * @param status_response The status message of the request.
+ * @param file_data struct containing all file info needed for the header. (Last modified, content type)
+ */
+void gen_header(char **header, int status_response, file_info file_data) {
+    char char_set[32], curr_time[32], lang[3];
 
+    time_t raw_time = time(NULL);
+    strftime(curr_time, 32, "%a, %d %b %Y %T %Z", gmtime(&raw_time));
     strcpy(char_set, "iso-8859-1");
     strcpy(lang, "de");
 
-    sprintf(header, "HTTP/1.1 %s\nDate: Tue, 20 Mar 2018 15:06:52 GMT\nLast-Modified: Tue, 20 Mar 2018 14:06:52 GMT\nContent-Language: %s\nContent-Type: %s; charset=%s\n",
-            status_lines[status_code], lang, content_type, char_set);
-    printf("RESPONSE:\n%s", header);
+    // If no modify date is set use the current one
+    if(strcmp(file_data.modify_date, "") == 0){
+        strcpy(file_data.modify_date, curr_time);
+    }
+
+    *header = (char*)malloc(sizeof(char)*256);
+    sprintf(*header, "HTTP/1.1 %s\nDate: %s\nLast-Modified: %s\nContent-Language: %s\nContent-Type: %s; charset=%s\n",
+            status_lines[status_response], curr_time, file_data.modify_date, lang, file_data.content_type, char_set);
+    printf("RESPONSE:\n%s", *header);
 }
 
-void read_file(FILE* file_ptr, char** content, long* size){
+/**
+ * Method to read a file and its meta data.
+ *
+ * @param file_ptr Pointer to the file stream.
+ * @param content Pointer to the location where the content should be saved.
+ * @param file_meta Pointer to the struct containing meta data.
+ */
+void read_file(FILE* file_ptr, char** content, file_info* file_meta) {
     fseek(file_ptr, 0, SEEK_END);
-    *size = ftell(file_ptr);
+    file_meta->file_size = ftell(file_ptr);
     rewind(file_ptr);
-    *content = (char*) malloc((size_t) *size);
-    fread(content, sizeof(char), (size_t) *size, file_ptr);
+    *content = (char*) malloc((size_t) file_meta->file_size);
+    fread(content, sizeof(char), (size_t) file_meta->file_size, file_ptr);
     fclose(file_ptr);
 }
 
-void read_error(int statuscode, char** content, long* size){
-    *size = sizeof(char)*1024;
-    *content = (char*) malloc((size_t)*size);
+/**
+ * Method to parse an error message.
+ *
+ * @param statuscode The code of the message to prase.
+ * @param content Pointer to the location where the content should be saved.
+ * @param file_meta Meta information of the error message. In this case just for the size.
+ */
+void read_error(int statuscode, char** content, file_info* file_meta) {
+    file_meta->file_size = sizeof(char)*1024;
+    *content = (char*) malloc((size_t)file_meta->file_size);
     strcpy(*content, get_error_string(statuscode));
 }
