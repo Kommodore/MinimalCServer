@@ -33,23 +33,24 @@ typedef struct
 typedef struct {
     char method[16];
     char file[256];
+    int doc_root;
 } client_header;
 
 typedef struct{
-    long long file_size;
+    size_t file_size;
     char content_type[32];
     char modify_date[32];
 } file_info;
 
 void process_request(const char* request_header, socket_info* client_info, const char* doc_root);
 
-void read_dir(const char* file_path, char** content, file_info* file_meta);
+void read_dir(const client_header* client_data, char** content, file_info* file_meta);
 
 int server_start(const char* dir, int port, socket_info* si);
 
 void read_header_data(client_header* src, const char* input_string, const char* doc_root);
 
-char* gen_response(const char* file_path, int is_dir, int statuscode, long* resp_size);
+char* gen_response(const client_header* client_data, int is_dir, int statuscode, long* resp_size);
 
 void gen_header(char** header, int status_response, file_info* file_data);
 

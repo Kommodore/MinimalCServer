@@ -80,12 +80,13 @@ void process_request(const char* request_header, socket_info* client_info, const
     int statuscode = HTTP_OK, is_dir = 0;
     long resp_size = 0;
     char* output = NULL;
-    client_header client_data;
+    client_header client_data = {.file = "", .method = "", .doc_root = 0};
 
     read_header_data(&client_data, request_header, doc_root);
+    //free((char*)request_header);
 
     if(strcmp(client_data.method, "GET") != 0){
-        output = gen_response(client_data.file, is_dir, HTTP_LEVEL_500+1, &resp_size);
+        output = gen_response(&client_data, is_dir, HTTP_LEVEL_500+1, &resp_size);
     } else {
         struct stat file_stat;
         if(stat(client_data.file, &file_stat) < 0){
@@ -105,11 +106,12 @@ void process_request(const char* request_header, socket_info* client_info, const
                 fclose(file_ptr);
             }
         }
-        output = gen_response(client_data.file, is_dir, statuscode, &resp_size);
+        output = gen_response(&client_data, is_dir, statuscode, &resp_size);
     }
     printf("Outputting\n%s\nwith %li bytes\n", output, resp_size);
     write(client_info->sock_fd, output, (size_t)resp_size);
     close(client_info->sock_fd);
+    free(output);
 }
 
 /**
@@ -151,15 +153,14 @@ int server_start(const char *dir, int port, socket_info* si)
 void read_header_data(client_header* src, const char* input_string, const char* doc_root){
     char buffer[256];
     printf("REQUEST:\n%s", input_string);
-    memset((void*)src->file, '\0', 256);
-    memset((void*)src->method, '\0', 16);
     strcpy(src->file, doc_root);
     sscanf(input_string, "%s %s HTTP1.1", src->method, buffer);
     if(buffer[1] != '\0'){ // Removing unnecessary slash
         memmove(buffer, buffer+1, 255);
         strcat(src->file, buffer);
+    } else {
+        src->doc_root = 1;
     }
-    printf("Accessing %s",src->file);
 }
 
 /**
@@ -170,10 +171,8 @@ void read_header_data(client_header* src, const char* input_string, const char* 
  *
  * @return Pointer to char array containing the response.
  */
-char* gen_response(const char* file_path, int is_dir, int statuscode, long* resp_size){
-    char* header = NULL;
-    char* content = NULL;
-    char* response = NULL;
+char* gen_response(const client_header* client_data, int is_dir, int statuscode, long* resp_size){
+    char *header = NULL, *content = NULL, *response = NULL;
     file_info file_meta = {.content_type = "text/html", .file_size = 0, .modify_date = ""};
 
     // Generate content
@@ -181,9 +180,9 @@ char* gen_response(const char* file_path, int is_dir, int statuscode, long* resp
         read_error(statuscode, &content, &file_meta);
     } else {
         if(is_dir == 1){
-            read_dir(file_path, &content, &file_meta);
+            read_dir(client_data, &content, &file_meta);
         } else {
-            read_file(file_path, &content, &file_meta);
+            read_file(client_data->file, &content, &file_meta);
             //strcpy(file_meta.content_type, "image/jpeg"); // TODO: Bei Image ändern?
         }
     }
@@ -194,6 +193,8 @@ char* gen_response(const char* file_path, int is_dir, int statuscode, long* resp
     response = (char*)malloc((size_t)*resp_size);
     memset((void*)response, '\0', *resp_size);
     sprintf(response, "%s\n%s", header, content);
+    free(content);
+    free(header);
     return response;
 }
 
@@ -230,21 +231,39 @@ void gen_header(char **header, int status_response, file_info* file_data) {
  * @param content The variable that should contain the result
  * @param file_meta File meta data. Used to set the size.
  */
-void read_dir(const char* file_path, char** content, file_info* file_meta) {  // TODO: Hardecodede filesize entfernen
-    DIR* dir_ptr = opendir(file_path);
+void read_dir(const client_header* client_data, char** content, file_info* file_meta) {
+    DIR* dir_ptr = opendir(client_data->file);
     struct dirent *dir_item;
     char buffer[256];
-    char* files = (char*)malloc(130000*sizeof(char));
-    *content = (char*)malloc(130000*sizeof(char));
+    size_t curr_size = 0;
+    size_t max_size = 256*sizeof(char);
+
+    *content = (char*)malloc(max_size);
+    sprintf(*content, "<!DOCTYPE html><html><head><title>Index of %s</title></head><body><h1>Index of %s</h1><ul>", client_data->file, client_data->file);
+
     do {
-        if((dir_item = readdir(dir_ptr)) != NULL && strcmp(dir_item->d_name, ".") != 0 && strcmp(dir_item->d_name, "..") != 0) {
+        if((dir_item = readdir(dir_ptr)) != NULL && (strcmp(dir_item->d_name, ".") != 0 || client_data->doc_root == 1) && strcmp(dir_item->d_name, "..") != 0) {
             sprintf(buffer, "<li><a href=\"./%s\">%s</a></li>", dir_item->d_name, dir_item->d_name);
-            strcat(files, buffer);
+
+            // Realloc string size if too small
+            curr_size += strlen(buffer)*sizeof(char);
+            if(curr_size >= max_size){
+                max_size *= 2;
+                *content = (char*)realloc(*content, max_size);
+            }
+            strcat(*content, buffer);
         }
     } while (dir_item != NULL);
-    sprintf(*content, "<!DOCTYPE html><html><head><title>Index of %s</title></head><body><h1>Index of %s</h1><ul>%s</ul></body></html>", file_path, file_path, files);
+
+    // Add the closing tags
+    curr_size +=20*sizeof(char);
+    if(curr_size > max_size){
+        *content = (char*)realloc(*content, max_size+(20*sizeof(char)));
+    }
+    file_meta->file_size = max_size+(20*sizeof(char));
+
+    strcat(*content, "</ul></body></html>");
     closedir(dir_ptr);
-    file_meta->file_size = 130000;
 }
 
 /**
@@ -256,10 +275,13 @@ void read_dir(const char* file_path, char** content, file_info* file_meta) {  //
  */
 void read_file(const char* file_path, char** content, file_info* file_meta) {
     FILE* file_ptr = fopen(file_path, "r");
+
+    // Get file size to alloc the needed space
     fseek(file_ptr, 0, SEEK_END);
-    file_meta->file_size = ftell(file_ptr);
+    file_meta->file_size = (size_t)ftell(file_ptr);
     rewind(file_ptr);
     *content = (char*) malloc((size_t) file_meta->file_size);
+
     fread(content, sizeof(char), (size_t) file_meta->file_size, file_ptr); // TODO: Error entfernen
     fclose(file_ptr);
 }
@@ -272,7 +294,7 @@ void read_file(const char* file_path, char** content, file_info* file_meta) {
  * @param file_meta Meta information of the error message. In this case just for the size.
  */
 void read_error(int statuscode, char** content, file_info* file_meta) {
-    file_meta->file_size = sizeof(char)*1024;
+    file_meta->file_size = sizeof(char)*1024; // TODO: Harcoded weg
     *content = (char*) malloc((size_t)file_meta->file_size);
     strcpy(*content, get_error_string(statuscode));
 }
