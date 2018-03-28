@@ -273,7 +273,7 @@ void handle_connection(SocketInfo* client)
 {
     int iterations;
     ssize_t read_bytes;
-    char *request_header_data;
+    char *request_header_data = NULL;
     char max_input_buffer[MAX_INPUT_BUFFER_SIZE];
 
     printf("%d: Connected!\n", CONNECTION_COUNT); 
