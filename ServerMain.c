@@ -128,7 +128,7 @@ void read_file(const char* file_path, char** content, FileInfo* file_meta) {
     char *dot = strrchr(file_path, '.');
     if(dot && dot != file_path)
     {
-        if((types_ptr = fopen("/Users/jonash/Dropbox/Coding/C/MinimalCServer/mime.types", "r")) != NULL)
+        if((types_ptr = fopen("/etc/MinimalCServer/mime.types", "r")) != NULL)
         {
             while(fgets(types_line, 512, types_ptr) != NULL)
             {
