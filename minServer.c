@@ -46,7 +46,7 @@ void process_request(char *request_header_data, SocketInfo *client)
     char *response_header;
     char *response;
 
-    int file_size;
+    size_t file_size;
     FILE *file;
 
     DIR *dir;
@@ -135,7 +135,7 @@ void process_request(char *request_header_data, SocketInfo *client)
 
                     do
                     {
-                        if((dp = readdir(dir)) != NULL)
+                        if((dp = readdir(dir)) != NULL && strcmp(dp->d_name, ".") != 0)
                         {
                             //NOTE (jonas): Hier scheint das Problem zu entstehen. Wie du gesagt hast, habe ich hier 
                             //                 einfach ein ../ vor den pfad geschrieben. allerdings hilft das nur bei der 
@@ -168,7 +168,8 @@ void process_request(char *request_header_data, SocketInfo *client)
     }
     else 
     {
-        //NOTE (jonas): Falls eine andere Methode als GET verwendet wird, beendet das den Kindprozess 
+        //NOTE (jonas): Falls eine andere Methode als GET verwendet wird, beendet das den Kindprozess
+        // TODO: Stattdessen 501 Page anzeigen
         printf("Unsupported method: %s\n", method);
         exit(1);
     }
@@ -178,7 +179,7 @@ void handle_connection(SocketInfo *client)
 {
     int iterations;
     ssize_t read_bytes;
-    char *request_header_data;
+    char *request_header_data = NULL;
     char max_input_buffer[MAX_INPUT_BUFFER_SIZE];
 
     printf("%d: Connected!\n", CONNECTION_COUNT); 
@@ -238,8 +239,8 @@ void start_server(SocketInfo *server, const char *dir, int port)
     memset((void*)&server->addr, '\0', sizeof(server->addr));
     server->addr_len = sizeof(server->addr);
     server->addr.sin_family = AF_INET;
-    server->addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server->addr.sin_port = htons(port);
+    server->addr.sin_addr.s_addr = htonl(INADDR_ANY); // NOLINT
+    server->addr.sin_port = htons(port); // NOLINT
     if(bind(server->sock_fd, (struct sockaddr*) &server->addr, sizeof(server->addr)) < 0)
     {
         printf("Can't open socket on %d, is socket already in use?\n", port);
@@ -263,7 +264,7 @@ int main(int argc, char** argv)
         exit(1);
     }
     strcpy(docroot, argv[1]);
-    server_port = atoi(argv[2]);
+    server_port = atoi(argv[2]); // NOLINT
 
     start_server(&server_info, docroot, server_port);
     printf("Server started in %s on port %d\n", docroot, server_port);
