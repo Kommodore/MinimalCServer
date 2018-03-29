@@ -35,8 +35,6 @@ static const char *const status_lines[RESPONSE_CODES] = {
     "501 Not Implemented",
 };
 
-const char *get_error_string(int status_code);
-
 static int CONNECTION_COUNT = 0;
 
 typedef struct SocketInfo
@@ -247,7 +245,7 @@ void process_request(char *request_header_data, SocketInfo *client)
         else 
         {
             //TODO: File_ptr übergeben?
-            if(S_ISDIR(file_stat.st_mode))
+            if(S_ISDIR(file_stat.st_mode)) // NOLINT
             {
                 is_dir = 1;
             } 
@@ -330,8 +328,8 @@ void start_server(SocketInfo *server, const char *dir, int port)
     memset((void*)&server->addr, '\0', sizeof(server->addr));
     server->addr_len = sizeof(server->addr);
     server->addr.sin_family = AF_INET;
-    server->addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server->addr.sin_port = htons(port);
+    server->addr.sin_addr.s_addr = htonl(INADDR_ANY); // NOLINT
+    server->addr.sin_port = htons(port); // NOLINT
     if(bind(server->sock_fd, (struct sockaddr*) &server->addr, sizeof(server->addr)) < 0)
     {
         printf("Can't open socket on %d, is socket already in use?\n", port);
