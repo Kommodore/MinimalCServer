@@ -47,7 +47,8 @@ typedef struct SocketInfo
 typedef struct ClientHeader
 {
     char method[16];
-    char file[256];
+    char file_request[256];
+    char file_path[512];
     bool is_docroot;
 } ClientHeader;
 
@@ -143,7 +144,7 @@ void read_file(const char* file_path, char** content, FileInfo* file_meta) {
         }
     }
 
-    // Get file size to alloc the needed space
+    // Get file_path size to alloc the needed space
     fseek(file_ptr, 0, SEEK_END);
     file_meta->file_size = (size_t)ftell(file_ptr);
     rewind(file_ptr);
@@ -159,14 +160,14 @@ void read_error(int statuscode, char** content, FileInfo* file_meta) {
 }
 
 void read_dir(const ClientHeader* client_data, char** content, FileInfo* file_meta) {
-    DIR* dir_ptr = opendir(client_data->file);
+    DIR* dir_ptr = opendir(client_data->file_path);
     struct dirent *dir_item;
     char buffer[256];
     size_t curr_size = 0;
     size_t max_size = 512;
 
     *content = (char*)malloc(max_size*sizeof(char));
-    sprintf(*content, "<!DOCTYPE html><html><head><title>Index of %s</title></head><body><h1>Index of %s</h1><ul>", client_data->file, client_data->file);
+    sprintf(*content, "<!DOCTYPE html><html><head><title>Index of %s</title></head><body><h1>Index of %s</h1><ul>", client_data->file_request, client_data->file_request);
     curr_size = strlen(*content);
 
     do {
@@ -209,7 +210,7 @@ char* gen_response(const ClientHeader* client_data, int is_dir, int statuscode, 
         if(is_dir == 1){
             read_dir(client_data, &content, &file_meta);
         } else {
-            read_file(client_data->file, &content, &file_meta);
+            read_file(client_data->file_path, &content, &file_meta);
         }
     }
 
@@ -232,10 +233,11 @@ void read_header_data(ClientHeader* src, const char* input_string)
 {
     char buffer[256];
     printf("REQUEST:\n%s", input_string);
-    strcpy(src->file, getcwd(buffer, 256));
+    strcpy(src->file_path, getcwd(buffer, 256));
     sscanf(input_string, "%s %s HTTP1.1", src->method, buffer);
+    strcat(src->file_request, buffer);
     if(buffer[1] != '\0'){ // Removing unnecessary slash
-        strcat(src->file, buffer);
+        strcat(src->file_path, buffer);
     } else {
         src->is_docroot = 1;
     }
@@ -247,7 +249,7 @@ void process_request(char *request_header_data, SocketInfo *client)
     bool is_dir = 0;
     long resp_size = 0;
     char* output = NULL;
-    ClientHeader client_data = {.file = "", .method = "", .is_docroot = 0};
+    ClientHeader client_data = {.file_path = "", .file_request = "", .method = "", .is_docroot = 0};
 
     read_header_data(&client_data, request_header_data);
     //free((char*)request_header_data);
@@ -259,7 +261,7 @@ void process_request(char *request_header_data, SocketInfo *client)
     else 
     {
         struct stat file_stat;
-        if(stat(client_data.file, &file_stat) < 0)
+        if(stat(client_data.file_path, &file_stat) < 0)
         {
             if(errno == EACCES)
             {
@@ -279,7 +281,7 @@ void process_request(char *request_header_data, SocketInfo *client)
             } 
             else 
             {
-                FILE* file_ptr = fopen(client_data.file, "r");
+                FILE* file_ptr = fopen(client_data.file_path, "r");
                 if(file_ptr == NULL)
                 {
                     statuscode = HTTP_LEVEL_400+4;
