@@ -173,7 +173,11 @@ void read_dir(const ClientHeader* client_data, char** content, FileInfo* file_me
     do {
         if((dir_item = readdir(dir_ptr)) != NULL && strcmp(dir_item->d_name, ".") != 0) {
             if(strcmp(dir_item->d_name, "..") != 0 || client_data->is_docroot == 0){
-                sprintf(buffer, "<li><a href=\"%s/%s\">%s</a></li>", client_data->file_request, dir_item->d_name, dir_item->d_name);
+                if(client_data->is_docroot == 0){
+                    sprintf(buffer, "<li><a href=\"%s/%s\">%s</a></li>", client_data->file_request, dir_item->d_name, dir_item->d_name);
+                } else {
+                    sprintf(buffer, "<li><a href=\"./%s\">%s</a></li>", dir_item->d_name, dir_item->d_name);
+                }
 
                 curr_size += strlen(buffer);
                 if(curr_size >= max_size){
