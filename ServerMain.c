@@ -92,7 +92,7 @@ void gen_header(char **header, int status_response, FileInfo* file_data) {
     }
 
     *header = (char*)malloc(sizeof(char)*256);
-    sprintf(*header, "HTTP/1.1 %s\nDate: %s\nLast-Modified: %s\nContent-Language: %s\nContent-Type: %s; charset=%s\n",
+    sprintf(*header, "HTTP/1.1 %s\nDate: %s\nLast-Modified: %s\nContent-Language: %s\nContent-Type: %s; charset=%s\n\n",
             status_lines[status_response], curr_time, file_data->modify_date, lang, file_data->content_type, char_set);
     printf("RESPONSE:\n%s", *header);
 }
@@ -120,17 +120,27 @@ const char* get_error_string(int status_code){
 
 void read_file(const char* file_path, char** content, FileInfo* file_meta) {
     FILE* file_ptr = fopen(file_path, "r");
-    FILE* types;
-    char mimeLine[512];
-    char mimeType[128];
+    FILE* types_ptr;
+    char types_line[512];
+    char file_extension[128];
+    char mime_type[128];
 
     char *dot = strrchr(file_path, '.');
-    if(dot && dot != file_path) {
-        printf("%s", dot + 1);
-        /*if((types = fopen("mime.types", "r")) != NULL){
-            while(fgets(mimeLine, 512, types) != NULL){
+    if(dot && dot != file_path)
+    {
+        if((types_ptr = fopen("/Users/jonash/Dropbox/Coding/C/MinimalCServer/mime.types", "r")) != NULL)
+        {
+            while(fgets(types_line, 512, types_ptr) != NULL)
+            {
+                if(types_line[0] != '#')
+                {
+                    sscanf(types_line, "%s %s", mime_type, file_extension);
+                    if(strcmp(file_extension, dot+1) == 0){
+                        strcpy(file_meta->content_type, mime_type);
+                    }
+                }
             }
-        }*/
+        }
     }
 
     // Get file size to alloc the needed space
@@ -208,7 +218,7 @@ char* gen_response(const ClientHeader* client_data, int is_dir, int statuscode, 
     response = (char*)malloc((size_t)*resp_size);
     memset((void*)response, '\0', *resp_size);
     
-    sprintf(response, "%s\n", header);
+    strcpy(response, header);
     //fread((response + strlen(header)), sizeof(char), file_meta.file_size, content);
     
     memcpy((response + strlen(header)), content, file_meta.file_size);
