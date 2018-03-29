@@ -181,7 +181,6 @@ void read_dir(const ClientHeader* client_data, char** content, FileInfo* file_me
                     *content = (char*)realloc(*content, max_size*sizeof(char));
                 }
                 strcat(*content, buffer);
-                printf("String is now: %s\n", *content);
             }
         }
     } while (dir_item != NULL);
@@ -303,8 +302,6 @@ void handle_connection(SocketInfo* client)
     char *request_header_data = NULL;
     char max_input_buffer[MAX_INPUT_BUFFER_SIZE];
 
-    printf("%d: Connected!\n", CONNECTION_COUNT); 
-
     for(iterations = 0;;++iterations)
     {
         if(iterations == 0)
@@ -339,14 +336,12 @@ void handle_connection(SocketInfo* client)
 void start_server(SocketInfo *server, const char *dir, int port)
 {
     int reuse = 1;
-    char path[256];
 
     if(chdir(dir) != 0)
     {
         printf("Can't start server in \"%s\", is directory existing?\n", dir);
         exit(1);
     }
-    printf("CWD: %s\n", getcwd(path, 256));
 
     if((server->sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0 || setsockopt(server->sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
     {
