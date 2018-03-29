@@ -174,7 +174,7 @@ void read_dir(const ClientHeader* client_data, char** content, FileInfo* file_me
             if(strcmp(dir_item->d_name, "..") != 0 || client_data->is_docroot == 0){
                 sprintf(buffer, "<li><a href=\"./%s\">%s</a></li>", dir_item->d_name, dir_item->d_name);
 
-                curr_size += +strlen(buffer);
+                curr_size += strlen(buffer);
                 if(curr_size >= max_size){
                     max_size *= 2;
                     *content = (char*)realloc(*content, max_size*sizeof(char));
