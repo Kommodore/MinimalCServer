@@ -163,23 +163,24 @@ void read_dir(const ClientHeader* client_data, char** content, FileInfo* file_me
     struct dirent *dir_item;
     char buffer[256];
     size_t curr_size = 0;
-    size_t max_size = 256*sizeof(char);
+    size_t max_size = 512;
 
-    *content = (char*)malloc(max_size);
+    *content = (char*)malloc(max_size*sizeof(char));
     sprintf(*content, "<!DOCTYPE html><html><head><title>Index of %s</title></head><body><h1>Index of %s</h1><ul>", client_data->file, client_data->file);
+    curr_size = strlen(*content);
 
     do {
         if((dir_item = readdir(dir_ptr)) != NULL && strcmp(dir_item->d_name, ".") != 0) {
             if(strcmp(dir_item->d_name, "..") != 0 || client_data->is_docroot == 0){
                 sprintf(buffer, "<li><a href=\"./%s\">%s</a></li>", dir_item->d_name, dir_item->d_name);
 
-                // Realloc string size if too small
-                curr_size += strlen(buffer)*sizeof(char);
+                curr_size += +strlen(buffer);
                 if(curr_size >= max_size){
                     max_size *= 2;
-                    *content = (char*)realloc(*content, max_size);
+                    *content = (char*)realloc(*content, max_size*sizeof(char));
                 }
                 strcat(*content, buffer);
+                printf("String is now: %s\n", *content);
             }
         }
     } while (dir_item != NULL);
