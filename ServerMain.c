@@ -162,7 +162,7 @@ void read_error(int statuscode, char** content, FileInfo* file_meta) {
 void read_dir(const ClientHeader* client_data, char** content, FileInfo* file_meta) {
     DIR* dir_ptr = opendir(client_data->file_path);
     struct dirent *dir_item;
-    char buffer[256];
+    char buffer[512];
     size_t curr_size = 0;
     size_t max_size = 512;
 
@@ -173,7 +173,7 @@ void read_dir(const ClientHeader* client_data, char** content, FileInfo* file_me
     do {
         if((dir_item = readdir(dir_ptr)) != NULL && strcmp(dir_item->d_name, ".") != 0) {
             if(strcmp(dir_item->d_name, "..") != 0 || client_data->is_docroot == 0){
-                sprintf(buffer, "<li><a href=\"./%s\">%s</a></li>", dir_item->d_name, dir_item->d_name);
+                sprintf(buffer, "<li><a href=\"%s/%s\">%s</a></li>", client_data->file_request, dir_item->d_name, dir_item->d_name);
 
                 curr_size += strlen(buffer);
                 if(curr_size >= max_size){
@@ -274,7 +274,6 @@ void process_request(char *request_header_data, SocketInfo *client)
         } 
         else 
         {
-            //TODO: File_ptr übergeben?
             if(S_ISDIR(file_stat.st_mode)) // NOLINT
             {
                 is_dir = 1;
@@ -377,8 +376,6 @@ int main(int argc, char **argv)
     SocketInfo server_info;
     SocketInfo client_info;
 
-
-    // TODO:Besser checken, was los ist!
     if(argc < 3)
     {
         printf("Usage: httpServ <documentRoot> <port>\n");
@@ -398,7 +395,6 @@ int main(int argc, char **argv)
 
         if((client_info.sock_fd = accept(server_info.sock_fd, (struct sockaddr *)&client_info.addr, (socklen_t *)&client_info.addr_len)) < 0)
         {
-            //TODO: Sollte der Server beendet werden, wenn client verbindung verliert?
             printf("Failed to establish connection with client\n");
             continue;
         }
