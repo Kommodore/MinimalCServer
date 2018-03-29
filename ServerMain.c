@@ -120,13 +120,25 @@ const char* get_error_string(int status_code){
 
 void read_file(const char* file_path, char** content, FileInfo* file_meta) {
     FILE* file_ptr = fopen(file_path, "r");
+    FILE* types;
+    char mimeLine[512];
+    char mimeType[128];
+
+    char *dot = strrchr(file_path, '.');
+    if(dot && dot != file_path) {
+        printf("%s", dot + 1);
+        /*if((types = fopen("mime.types", "r")) != NULL){
+            while(fgets(mimeLine, 512, types) != NULL){
+            }
+        }*/
+    }
 
     // Get file size to alloc the needed space
     fseek(file_ptr, 0, SEEK_END);
     file_meta->file_size = (size_t)ftell(file_ptr);
     rewind(file_ptr);
     *content = (char*) malloc((size_t) file_meta->file_size);
-    fread(*content, sizeof(char), (size_t) file_meta->file_size, file_ptr); // TODO: Error entfernen
+    fread(*content, sizeof(char), (size_t) file_meta->file_size, file_ptr);
     fclose(file_ptr);
 }
 
@@ -187,7 +199,6 @@ char* gen_response(const ClientHeader* client_data, int is_dir, int statuscode, 
             read_dir(client_data, &content, &file_meta);
         } else {
             read_file(client_data->file, &content, &file_meta);
-            //strcpy(file_meta.content_type, "image/jpeg"); // TODO: Bei Image ändern?
         }
     }
 
