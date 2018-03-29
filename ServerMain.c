@@ -207,7 +207,11 @@ char* gen_response(const ClientHeader* client_data, int is_dir, int statuscode, 
     *resp_size = file_meta.file_size+(strlen(header)*sizeof(char));
     response = (char*)malloc((size_t)*resp_size);
     memset((void*)response, '\0', *resp_size);
-    sprintf(response, "%s\n%s", header, content);
+    
+    sprintf(response, "%s\n", header);
+    //fread((response + strlen(header)), sizeof(char), file_meta.file_size, content);
+    
+    memcpy((response + strlen(header)), content, file_meta.file_size);
     //free(content);
     //free(header);
     return response;
